@@ -33,31 +33,31 @@ class Line(object):
         """Reads socket until at least one byte is read or timeout (in seconds) is expired."""
         socket = self.__socket__
         try:
-            return socket.recv(4096, MSG_DONTWAIT)
+            self.__buffer__ += socket.recv(4096, MSG_DONTWAIT)
         except socket_error as e:
             if e.errno != EAGAIN:
                 raise
         oldtimeout = socket.gettimeout()
         try:
             socket.settimeout(timeout)
-            return socket.recv(1, MSG_WAITALL)
+            self.__buffer__ += socket.recv(1, MSG_WAITALL)
         except socket_timeout as e:
-            return b''
+            return
         except socket_error as e:
             if e.errno == EAGAIN:
-                return b''
+                return
             raise       
         finally:
             socket.settimeout(oldtimeout)
                     
     def readline(self, delimiter=b'\r'):
         def tryReadLine(timeout):
-            self.__buffer__ += self.readWithTimeout(timeout.seconds)
             eolPosition = self.__buffer__.find(delimiter)
             if eolPosition >= 0:
                 line = self.__buffer__[0:eolPosition]
                 self.__buffer__ = self.__buffer__[eolPosition + len(delimiter):]
                 return line
+            self.readWithTimeout(timeout.total_seconds())
             return None            
         line = tryUntilTimeout(tryReadLine, self.timeout)
         if not line:

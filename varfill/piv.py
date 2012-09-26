@@ -19,7 +19,6 @@ class Piv(object):
     escapedSymbols = (Piv.cstart, Piv.cstop, Piv.cshift)
     def __init__(self, line):
         self.__line__ = line
-        self.__buffer__ = bytearray()
     def send(self, address, data):
         assert(isinstance(address, int))   
         buffer = bytearray()
