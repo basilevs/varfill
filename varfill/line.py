@@ -23,6 +23,12 @@ def tryUntilTimeout(action, timeout):
         if timeout < timedelta(0):
             return rv
 
+def tohex(data):
+    rv=""
+    for b in data:
+        rv+="%02X" % b
+    return rv
+
         
 class Line(object):
     def __init__(self, socket):
@@ -52,16 +58,20 @@ class Line(object):
                     
     def readline(self, delimiter=b'\r'):
         def tryReadLine(timeout):
-            eolPosition = self.__buffer__.find(delimiter)
-            if eolPosition >= 0:
-                line = self.__buffer__[0:eolPosition]
-                self.__buffer__ = self.__buffer__[eolPosition + len(delimiter):]
+            def processBuf():
+                eolPosition = self.__buffer__.find(delimiter)
+                if eolPosition >= 0:
+                    line = self.__buffer__[0:eolPosition]
+                    self.__buffer__ = self.__buffer__[eolPosition + len(delimiter):]
+                    return line
+            line = processBuf()
+            if line:
                 return line
             self.readWithTimeout(timeout.total_seconds())
-            return None            
+            return processBuf()
         line = tryUntilTimeout(tryReadLine, self.timeout)
         if not line:
-            raise Timeout("Line read timeout. Data read so far: " + self.__buffer__.decode("utf-8"))
+            raise Timeout("Line read timeout. Data read so far: " + str(self.__buffer__))
         return line
     
     def write(self, data):
@@ -71,3 +81,23 @@ class Line(object):
             self.__socket__.sendall(data)
         finally:
             socket.settimeout(oldtimeout)    
+
+class DebugLine(object):
+    def __init__(self, line, prefix=""):
+        self.__line__ = line
+        self.prefix = prefix
+    def setTimeout(self, timeout):
+        self.__line__.tiemout = timeout
+    timeout = property(lambda self: self.__line__.timeout, setTimeout)
+    def write(self, data):
+        print(self.prefix,"sending ",tohex(data))
+        self.__line__.write(data)
+    def readline(self, delimiter=b'\r'):
+        rv = self.__line__.readline(delimiter)
+        print(self.prefix,"read line",tohex(rv))
+        return rv
+    def readWithTimeout(self, timeout):
+        rv = self.__line__.readWithTimeout(timeout)
+        print(self.prefix,"read ",tohex(rv))
+        return rv
+    
