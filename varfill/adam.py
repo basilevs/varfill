@@ -1,4 +1,5 @@
 from line import Timeout
+from datetime import timedelta
 
 class AdamError(RuntimeError):
     pass
@@ -37,13 +38,14 @@ class AdamModule(object):
         self.__addressNum__ = address
         self.__address__ = bytes("%02X" % address, "utf-8")
         assert(len(self.__address__) == 2) 
+        self.timeout = timedelta(seconds=1)
     def query(self, command):
         command = bytes(command, "utf-8")
         address = self.__address__
         request = b"$" + address + command
         self.__line__.write(request + b"\r")
         try:
-            line = self.__line__.readline()
+            line = self.__line__.readline(self.timeout)
         except Timeout as e:
             raise Timeout("Timeout while waiting for reply for query: " + request.decode("utf-8")) from e
         if len(line) < 3:
@@ -59,7 +61,7 @@ class AdamModule(object):
         request = b"#" + address + data
         self.__line__.write(request + b"\r")
         try:
-            line = self.__line__.readline()
+            line = self.__line__.readline(self.timeout)
         except Timeout as e:
             raise Timeout("Error while waiting for reply to write request: " + request.decode("utf-8")) from e
         if line == b">":
@@ -67,6 +69,8 @@ class AdamModule(object):
         elif line[0:1] == b'!':
             if line[1:3] != address:
                 raise BadReply(request, line, " wrong address in reply")
+            if len(line) == 3:
+                return
             if line[3:] != data:
                 raise BadReply(request, line, " wrong data in reply")
         elif line[0:1] == b'?':
@@ -99,7 +103,7 @@ class Adam4024(AdamModule):
         t = self.query("M")
         if t != "4024":
             raise BadModuleType("4024", t)
-    def validateChannel(self, channel):
+    def __validateChannel__(self, channel):
         if channel < 0 or channel > 3:
             raise ValueError("Invalid channel: %d. Channel should be in  [0..3]" % channel)        
     def setChannel(self, channel, value):
@@ -107,9 +111,9 @@ class Adam4024(AdamModule):
             Use setChannelOutputRange() to configure current/voltage mode.
         """
         channel = int(channel)
-        self.validateChannel(channel)
+        self.__validateChannel__(channel)
         value = float(value)
-        data = "C%X%06.3f" % (channel, value)
+        data = "C%X%+07.3f" % (channel, value)
         self.write(data)
     def setChannelOutputRange(self, channel, rangeMode):
         """ Allowed ranges:
@@ -118,11 +122,11 @@ class Adam4024(AdamModule):
         2 - -10 ~ +10 V
         """
         channel = int(channel)
-        self.validateChannel(channel)      
+        self.__validateChannel__(channel)      
         if not rangeMode in (0, 1, 2):
             raise ValueError("Invalid rangeMode: %d, range should be in [0,1,2]" % rangeMode)
         query = "7C%dR3%d" % (channel, rangeMode)
-        reply = self.query()
+        reply = self.query(query)
         if reply != "":
             raise BadReply(query, reply, " reply should be empty string")
         

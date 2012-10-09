@@ -33,19 +33,21 @@ def tohex(data):
 class Line(object):
     def __init__(self, socket):
         self.__socket__ = socket
-        self.timeout = timedelta(seconds=1)
         self.__buffer__ = bytearray()
     def readWithTimeout(self, timeout):
-        """Reads socket until at least one byte is read or timeout (in seconds) is expired."""
+        """Reads socket into buffer until at least one byte is read or timeout is expired."""
+        assert(isinstance(timeout, timedelta))
         socket = self.__socket__
         try:
             self.__buffer__ += socket.recv(4096, MSG_DONTWAIT)
+            return
         except socket_error as e:
             if e.errno != EAGAIN:
                 raise
         oldtimeout = socket.gettimeout()
         try:
-            socket.settimeout(timeout)
+            socket.settimeout(timeout.total_seconds())
+            #print("Waiting")
             self.__buffer__ += socket.recv(1, MSG_WAITALL)
         except socket_timeout as e:
             return
@@ -56,7 +58,8 @@ class Line(object):
         finally:
             socket.settimeout(oldtimeout)
                     
-    def readline(self, delimiter=b'\r'):
+    def readline(self, timeout, delimiter=b'\r'):
+        assert(isinstance(timeout, timedelta))
         def tryReadLine(timeout):
             def processBuf():
                 eolPosition = self.__buffer__.find(delimiter)
@@ -64,12 +67,13 @@ class Line(object):
                     line = self.__buffer__[0:eolPosition]
                     self.__buffer__ = self.__buffer__[eolPosition + len(delimiter):]
                     return line
+                return None
             line = processBuf()
             if line:
                 return line
-            self.readWithTimeout(timeout.total_seconds())
+            self.readWithTimeout(timeout)
             return processBuf()
-        line = tryUntilTimeout(tryReadLine, self.timeout)
+        line = tryUntilTimeout(tryReadLine, timeout)
         if not line:
             raise Timeout("Line read timeout. Data read so far: " + str(self.__buffer__))
         return line
@@ -92,8 +96,8 @@ class DebugLine(object):
     def write(self, data):
         print(self.prefix,"sending ",tohex(data))
         self.__line__.write(data)
-    def readline(self, delimiter=b'\r'):
-        rv = self.__line__.readline(delimiter)
+    def readline(self, timeout, delimiter=b'\r'):
+        rv = self.__line__.readline(timeout, delimiter)
         print(self.prefix,"read line",tohex(rv))
         return rv
     def readWithTimeout(self, timeout):
