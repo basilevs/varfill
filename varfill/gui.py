@@ -1,5 +1,6 @@
-from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, BOTH, N, S, LAST
-
+from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, BOTH, N, S, LAST, NORMAL, DISABLED
+from threading import Thread
+from queue import Queue
 
 class Axis(object):
     def __init__(self, start=0, end = 100, size = 100, direction = 1, margin = 10):
@@ -25,100 +26,216 @@ class Axis(object):
             return 0        
         scale = clientSize / float(self.end - self.start) * self.direction
         return x*scale + self.__shift__()
-    
-class Graph(Canvas):
-    def __init__(self, parent):
-        Canvas.__init__(self, parent, bg="white")
-        self.points = []
-        self.start = 0
-     r  self.end = 100
-        self.bind("<Configure>", lambda ev: self.after_idle(self.__onResize__))
+    def generateMarks(self):
+        self.validate()
+        step = 10
+        while  int(self.end - self.start)/step > 10:
+            step *= 10
+        x =  self.start - (self.start % step)
+        while  x < self.end-1:
+            x += step 
+            yield (x, self.toExternal(x))
+
+class GraphCanvas(Canvas):
+    def __init__(self, *args, **kwargs):
+        Canvas.__init__(self, *args, **kwargs)
+        self.graphs=[]
         self.x=Axis()
         self.y=Axis()
         self.y.direction=-1
-        
-    def __onResize__(self):
+        self.bind("<Configure>", lambda ev: self.after_idle(self.__onConfigure__))        
+    def drawLine(self, x1, y1, x2, y2, **kwargs):
+        y1 = self.y.toExternal(y1)
+        coord = (self.x.toExternal(x1), y1,
+                 self.x.toExternal(x2), self.y.toExternal(y2))
+        self.create_line(*coord, **kwargs)
+    def clear(self):
+        for i in self.find_all():
+            self.delete(i)
+        self.__drawAxises__()
+    def update(self):
+        self.clear()
+        for g in self.graphs:
+            g.draw()
+    def __onConfigure__(self):
         w = self.winfo_width()
         h = self.winfo_height()
         if w in [-1, 1]:
             return
         if h in [-1, 1]:
             return
-        self.x.size = w  
-        self.y.size = h
-        self.update()
-
-    def drawLine(self, x1, y1, x2, y2):
-        y1 = self.y.toExternal(y1)
-        coord = (self.x.toExternal(x1), y1,
-                 self.x.toExternal(x2), self.y.toExternal(y2))
-        print(coord)
-        self.create_line(*coord, width=1)
-        
-    def drawStep(self, prevPoint, currentPoint):
-        assert(len(prevPoint) == len(currentPoint))
-        for i in range(1, len(prevPoint)):
-            self.drawLine(prevPoint[0], prevPoint[i], currentPoint[0], currentPoint[i])
-    
-    def drawAxises(self):
+        self.x.size = w
+        self.y.size = h        
+        self.update()       
+    def __drawAxises__(self):
         y0 = self.y.toExternal(0)
         y1 = self.y.toExternal(self.y.end) 
         x0 = self.x.toExternal(0)
         x1 = self.x.toExternal(self.x.end)
         self.create_line(x0, y0, x1, y0, width = 2, arrow=LAST)
         self.create_line(x0, y0, x0, y1, width = 2, arrow=LAST)
-    def update(self):
-        for i in self.find_all():
-            self.delete(i)
-        self.drawAxises()
+        for t,m in self.x.generateMarks():
+            self.create_line(m, y0, m, y0-4, width=3)
+            self.create_text(m, y0-10, text=str(t))
+        for t,m in self.y.generateMarks():
+            self.create_line(x0, m, x0+4, m, width=3)
+            self.create_text(x0+15, m, text=str(t))
+        
+class Graph(object):
+    def __init__(self, canvas):
+        assert(isinstance(canvas, Canvas))
+        self.points = []
+        self.pointToDraw = 0
+        canvas.graphs.append(self)
+        self.canvas = canvas
+    def draw(self):
         prev = None
+        self.pointToDraw = len(self.points)
         for p in self.points:
             if prev:
-                self.drawStep(prev, p)
+                self.__drawStep__(prev, p)
             prev = p
-    def addPoint(self, x, values):
-        point = [x]
-        point.extend(values)
-        self.points.append(point)
-    def setRange(self, start, end):
-        pass
-    def clear(self):
-        for i in self.find_all():
-            self.delete(i)
-        self.points=[]
+    @staticmethod 
+    def __checkPoint__(point):
+        assert(len(point)==2)
+        assert(isinstance(point[0], float))
+        assert(isinstance(point[1], float))
+    def __drawStep__(self, prevPoint, currentPoint):
+        Graph.__checkPoint__(prevPoint)
+        Graph.__checkPoint__(currentPoint)  
+        self.canvas.drawLine(prevPoint[0], prevPoint[1], currentPoint[0], prevPoint[1])
+        self.canvas.drawLine(currentPoint[0], prevPoint[1], currentPoint[0], currentPoint[1])    
+    def addPoint(self, x, y):
+        self.points.append((float(x),float(y)))
+        if len(self.points)>=2:
+            self.__drawStep__(*self.points[-2:])
+
+class ShcheduleOnce(object):
+    def __init__(self, action, scheduler):
+        self.action = action
+        self.scheduled = None
+        self.updateScheduler = scheduler
+    def __runWithCancel__(self):
+        try:
+            self.action()
+        finally:
+            self.scheduled = None
+    def schedule(self):
+        if self.scheduled:
+            self.updateScheduler.after_cancel(self.scheduled)
+        self.scheduled = self.updateScheduler.after_idle(self.__runWithCancel__)
+
+def run_repeating(widget, predicate, delay = 1000):
+    def torun():
+        if predicate():
+            return
+        widget.after(delay, torun)
+    torun()
+    
         
 class Gui(Frame):
     def __init__(self, control, *args, **kwargs):
         Frame.__init__(self, *args, **kwargs)
+        self.queue = Queue()
         self.control = control
-        self.columnconfigure(0, weight=1)
+        self.columnconfigure(2, weight=1)
         self.rowconfigure(3, weight=1)
+        self.disabledWhileRunning = []
         self.createWidgets()
-    
+        self.control.stepCallback = self.__addPoint__
+        self.thread=None
+                
     def compileFormulae(self):
         rv = []
         for f in self.formulae:
             body = "def formula5480750923(x):\n  return "+f.get()
             l = {}
-            exec(body, {}, l)
+            try:
+                exec(body, {}, l)
+            except:
+                rv.append(None)
+                continue
             compiled = l["formula5480750923"]
             compiled(0)
             rv.append(compiled)
         return rv
     def plotFormulae(self):
-        compiled = self.compileFormulae()
-        for x in range(100):        
+        try:
+            compiled = self.compileFormulae()
+        except:
+            return
+        for g in self.graphs:
+            g.points=[]
+        for x in range(self.canvas.x.start, self.canvas.x.end):        
             point = []
             for c in range(len(compiled)):
-                point.append(compiled[c](x))
-            self.graph.addPoint(x, point)
-    def createWidgets(self):
-        self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
-        for f in self.formulae:
-            Entry(self, textvariable=f).grid(sticky=E+W)
-        Button (self, text='Quit', command=self.quit).grid()         
-        self.graph = Graph(self)
+                v = None
+                if compiled[c]:
+                    v = compiled[c](x)
+                point.append(v)
+            self.__addPoint__(x, point)
+        self.canvas.update()
+    def __start__(self):
+        time = float(self.canvas.x.end - self.canvas.x.start)        
+        pumps = self.compileFormulae()
+        def calcPumpValues(time):
+            return list(map(lambda x: x(time), pumps))
+        def thFunc():
+            try:
+                for g in self.graphs:
+                    g.points=[]
+                self.control.executeProgram(time, 200, calcPumpValues)
+            finally:
+                self.invoke(self.__enableControls__)
+        self.thread = Thread(target=thFunc, name="Control")
+        self.__disableControls__()
+        self.canvas.clear()
+        self.thread.start()
+    def __enableControls__(self):
+        for e in self.disabledWhileRunning:
+            e.config(state = NORMAL)
+    def __disableControls__(self):
+        for e in self.disabledWhileRunning:
+            e.config(state = "disabled")
+    def __addPoint__(self, x, values):
+        def c():
+            for i in range(len(self.canvas.graphs)):
+                self.canvas.graphs[i].addPoint(x, values[i])
+        self.invoke(c)    
+    def invoke(self, callable):
+        self.after_idle(callable)
         
-        self.graph.setRange(0, 100)
+    def __stop__(self):
+        self.control.stop()
+    def __quit__(self):
+        self.__stop__()
+        def quitting():
+            if self.thread and self.thread.is_alive():
+                return False
+            self.quit()
+            return True
+        run_repeating(self, quitting)
+        
+    def createWidgets(self):
+        columns=3
+        startButton = Button (self, text='Старт', command=self.__start__)
+        startButton.grid(row=0,column=0)
+        self.disabledWhileRunning.append(startButton)         
+        Button (self, text='Стоп', command=self.__stop__).grid(row=0,column=1)         
+        Button (self, text='Выход', command=self.__quit__).grid(row=0,column=2)
+        self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
+        self.pumpEntries=[]
+        for f in self.formulae:
+            e = Entry(self, textvariable=f)
+            e.grid(sticky=E+W, columnspan=columns)
+            self.disabledWhileRunning.append(e)
+            self.pumpEntries.append(e)
+            f.trace("w", lambda *x: self.after_idle(self.plotFormulae))
+
+        self.canvas = GraphCanvas(self)
+        self.graphs = (Graph(self.canvas), Graph(self.canvas))
+        
+        self.canvas.x.end=100
+        self.canvas.y.end=24
         self.plotFormulae()
-        self.graph.grid(sticky=E+W+S+N)
+        self.canvas.grid(sticky=E+W+S+N, columnspan=columns)

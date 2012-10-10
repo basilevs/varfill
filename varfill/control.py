@@ -32,11 +32,10 @@ class Control(object):
     def __init__(self):
         self.pumps=[]
         self.mover=Mover()
-        @staticmethod
         def dummy(seconds, pumpValues):
             pass
         self.stepCallback=dummy
-        self.stopRequest = False
+        self.stopRequest = True
     def __stop__(self):
         self.stopRequest = True
         for i in range(len(self.pumps)):
@@ -47,7 +46,9 @@ class Control(object):
             moveSpeed - a speed of motor (will be constant during whole process)
             calPumpValues - a callable that should accept time in seconds since program start (floating point number)
             and return a tuple of pump speeds each speed should be a floating point in [0..1] 
-        """           
+        """
+        if not self.stopRequest:
+            raise RuntimeError("Already running")           
         self.stopRequest = False
         self.mover.setSpeed(moveSpeed)
         start = datetime.now()
@@ -57,7 +58,7 @@ class Control(object):
             if self.stopRequest:
                 break
             seconds = (datetime.now() - start).total_seconds();
-            values = calcPumpValues()
+            values = calcPumpValues(seconds)
             for i in range(len(self.pumps)):
                 self.pumps[i](values[i])
             self.stepCallback(seconds, values)
