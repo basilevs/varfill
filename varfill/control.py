@@ -79,4 +79,26 @@ def defaultControl():
         adam1.setChannel(3, value*20+4)
     control.pumps = [pump1]
     return control
+
+def mockControl():
+    control = Control()
+    
+    class MoverMock(Mover):
+        def setSpeed(self, speed):
+            print("Speed",speed)
+        def start(self):
+            print("Mover start")
+        def stop(self):
+            print("Mover stop")
+            
+    control.mover = MoverMock()
+    def pump1(value):
+        sleep(0.5)
+        print("Pump1: "+str(value))
+    def pump2(value):
+        sleep(0.5)
+        print("Pump2: "+str(value))
+        
+    control.pumps=[pump1, pump2]
+    return control
     

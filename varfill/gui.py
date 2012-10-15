@@ -1,6 +1,8 @@
-from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, BOTH, N, S, LAST, NORMAL, DISABLED
+from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, BOTH, N, S, LAST, NORMAL, DISABLED, Tk
 from threading import Thread
 from queue import Queue
+import unittest
+from control import mockControl
 
 class Axis(object):
     def __init__(self, start=0, end = 100, size = 100, direction = 1, margin = 10):
@@ -187,9 +189,9 @@ class Gui(Frame):
                 self.control.executeProgram(time, 200, calcPumpValues)
             finally:
                 self.invoke(self.__enableControls__)
-        self.thread = Thread(target=thFunc, name="Control")
         self.__disableControls__()
         self.canvas.clear()
+        self.thread = Thread(target=thFunc, name="Control")
         self.thread.start()
     def __enableControls__(self):
         for e in self.disabledWhileRunning:
@@ -211,6 +213,7 @@ class Gui(Frame):
         self.__stop__()
         def quitting():
             if self.thread and self.thread.is_alive():
+                print("Thread is active")
                 return False
             self.quit()
             return True
@@ -218,11 +221,11 @@ class Gui(Frame):
         
     def createWidgets(self):
         columns=3
-        startButton = Button (self, text='Старт', command=self.__start__)
+        startButton = Button (self, name='start', text='Старт', command=self.__start__)
         startButton.grid(row=0,column=0)
         self.disabledWhileRunning.append(startButton)         
         Button (self, text='Стоп', command=self.__stop__).grid(row=0,column=1)         
-        Button (self, text='Выход', command=self.__quit__).grid(row=0,column=2)
+        Button (self, name='quit', text='Выход', command=self.__quit__).grid(row=0,column=2)
         self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
         self.pumpEntries=[]
         for f in self.formulae:
@@ -239,3 +242,36 @@ class Gui(Frame):
         self.canvas.y.end=24
         self.plotFormulae()
         self.canvas.grid(sticky=E+W+S+N, columnspan=columns)
+
+
+class GuiTest(unittest.TestCase):
+    @staticmethod
+    def create():
+        root=Tk()        
+        root.columnconfigure(0, weight=1)
+        root.rowconfigure(0, weight=1)
+        gui = Gui(mockControl(), root)
+        gui.grid(sticky=E+W+S+N)
+        return (root, gui)
+    def withRoot(self, test):
+        root, gui = GuiTest.create()
+        try:
+            test(root, gui)
+        finally:
+            root.destroy()
+        
+    def test_quit(self):
+        def t(root, gui):
+            gui.invoke(gui.nametowidget("quit").invoke)
+            root.mainloop()
+        self.withRoot(t)
+    def test_startQuit(self):
+        def t(root, gui):
+            gui.nametowidget("start").invoke()
+            gui.nametowidget("quit").invoke()
+            root.mainloop()
+        self.withRoot(t)
+        
+if __name__ == '__main__':
+    unittest.main()
+       

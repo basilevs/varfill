@@ -291,6 +291,7 @@ class KshdConfigurationTest(unittest.TestCase):
         speedConf2 = Kshd.SpeedConf.fromWord(w)
         self.assertEqual(speedConf2.toWord(), w)
         self.assertEqual(speedConf2.max, 2000)
+
 if __name__ == '__main__':
     unittest.main()
         
