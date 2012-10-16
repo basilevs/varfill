@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from socket import MSG_DONTWAIT, MSG_WAITALL, error as socket_error, timeout as socket_timeout
+from socket import error as socket_error, timeout as socket_timeout
 from errno import EAGAIN
 from threading import Lock
 
@@ -41,24 +41,24 @@ class Line(object):
         assert(isinstance(timeout, timedelta))
         socket = self.__socket__
         try:
-            self.__buffer__ += socket.recv(4096, MSG_DONTWAIT)
+            socket.settimeout(0.01)
+            self.__buffer__ += socket.recv(4096)
             return
+        except socket_timeout:
+            pass
         except socket_error as e:
             if e.errno != EAGAIN:
                 raise
-        oldtimeout = socket.gettimeout()
         try:
             socket.settimeout(timeout.total_seconds())
             #print("Waiting")
-            self.__buffer__ += socket.recv(1, MSG_WAITALL)
+            self.__buffer__ += socket.recv(1)
         except socket_timeout as e:
             return
         except socket_error as e:
             if e.errno == EAGAIN:
                 return
             raise       
-        finally:
-            socket.settimeout(oldtimeout)
                     
     def readline(self, timeout, delimiter=b'\r'):
         assert(isinstance(timeout, timedelta))

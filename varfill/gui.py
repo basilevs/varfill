@@ -1,4 +1,4 @@
-from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, N, S, LAST, NORMAL, Tk, IntVar, Label
+from tkinter import Frame, LabelFrame, Button, Entry, StringVar, Canvas, E, W, N, S, LAST, NORMAL, Tk, IntVar, Label
 from threading import Thread
 from queue import Queue
 import unittest
@@ -138,6 +138,7 @@ def run_repeating(widget, predicate, delay = 1000):
 class Gui(Frame):
     def __init__(self, control, *args, **kwargs):
         Frame.__init__(self, *args, **kwargs)
+        self.config(padx=2)
         self.queue = Queue()
         self.control = control
         self.disabledWhileRunning = []
@@ -177,16 +178,17 @@ class Gui(Frame):
         self.canvas.update()
     def __start__(self):
         time = float(self.canvas.x.end - self.canvas.x.start)        
-        pumps = self.compileFormulae()
+        pumps = self.compileFormulae()        
         def calcPumpValues(time):
             return list(map(lambda x: x(time), pumps))
         def thFunc():
             try:
                 for g in self.graphs:
                     g.points=[]
-                self.control.executeProgram(time, 200, calcPumpValues)
+                self.control.executeProgram(time, abs(int(self.programSpeed.get())), calcPumpValues)
             finally:
                 self.invoke(self.__enableControls__)
+        self.control.mover.maxTravel = abs(int(self.maxTravel.get()))
         self.__disableControls__()
         self.canvas.clear()
         self.thread = Thread(target=thFunc, name="Control")
@@ -216,38 +218,86 @@ class Gui(Frame):
             self.quit()
             return True
         run_repeating(self, quitting)
+
+    def __move__(self, steps):
+        speed= int(self.speed.get())
+        if speed < 0:
+            speed *= -1
+            self.speed.set(speed)
+        self.control.mover.go(steps)
     def __up__(self):
         steps = int(self.steps.get())
-        self.control.mover.go(steps)
+        self.__move__(steps)
     def __down__(self):
         steps = int(self.steps.get())
-        self.control.mover.go(-steps)
+        self.__move__(-steps)
         
     def createWidgets(self):
-        columns=4
-        startButton = Button (self, name='start', text='Старт', command=self.__start__)
-        startButton.grid(row=0,column=0)
-        self.disabledWhileRunning.append(startButton)         
-        Button (self, text='Стоп', command=self.__stop__).grid(row=0,column=1)         
-        Button (self, name='quit', text='Выход', command=self.__quit__).grid(row=0,column=2)
-        self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
-        for f in self.formulae:
-            e = Entry(self, textvariable=f)
-            e.grid(sticky=E+W)
-            self.disabledWhileRunning.append(e)
-            f.trace("w", lambda *x: self.after_idle(self.plotFormulae))
-        Button(self, text='Вверх', command=self.__up__).grid(row=3, column=0)
-        Button(self, text='Вниз', command=self.__down__).grid(row=3, column=1)
-        Label(self, text="Шаг:").grid(sticky=E, row=3, column=2)
+        panel = Frame(self, name="mainMenu")
+        panel.grid(sticky=W)        
+        Button (panel, name='quit', text='Выход', command=self.__quit__).grid(row=0,column=2)
+        panel = LabelFrame(self, text="Прямое управление стаканом", name="motor")
+        panel.grid(sticky=W)
+        b=Button(panel, text='Вверх', command=self.__up__, name="up")
+        b.grid(row=0, column=0)
+        self.disabledWhileRunning.append(b)
+        b=Button(panel, text='Вниз', command=self.__down__, name="down")
+        b.grid(row=1, column=0)
+        self.disabledWhileRunning.append(b)
+        Label(panel, text="Шаг:").grid(sticky=E, row=0, column=1)
         self.steps = IntVar(self, "100")
-        Entry(self, textvariable=self.steps).grid(sticky=W, row=3, column=3)
+        Entry(panel, textvariable=self.steps, width=6).grid(sticky=W, row=0, column=2)
+        Label(panel, text="Скорость:").grid(sticky=E, row=1, column=1)
+        self.speed = IntVar(self, "1000")
+        Entry(panel, textvariable=self.speed, width=6).grid(sticky=W, row=1, column=2)
+        self.position = IntVar(self, "1000")
+        def readPosition():
+            self.position.set(self.control.mover.getPosition())
+        b=Button(panel, text="Прочитать положение", command=readPosition)
+        b.grid(row=0, column=3, columnspan=2)
+        self.disabledWhileRunning.append(b)
+        Label(panel, text="Положение:").grid(sticky=E, row=1, column=3)
+        Entry(panel, textvariable=self.position, width=8, state = "disabled").grid(sticky=W, row=1, column=4)
+
+        self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
+        panel = LabelFrame(self, text="Программа", name="program")
+        program=panel
+        panel.grid(sticky=W+E)
+        panel.columnconfigure(1, weight=1)
+        row = 0
+        for f in self.formulae:
+            columns, rows = self.grid_size()
+            Label(panel, text="Насос %d:" % (row+1)).grid(row=row, column=0, sticky=E)           
+            e = Entry(panel, textvariable=f)
+            e.grid(sticky=E+W, row=row, column=1)            
+            self.disabledWhileRunning.append(e)            
+            f.trace("w", lambda *x: self.after_idle(self.plotFormulae))
+            row+=1
+        panel = Frame(program, name="mover")
+        panel.grid(columnspan=2, sticky=W)        
+        self.maxTravel = IntVar(self, "-1000000")
+        Label(panel, text="Максимальное смещение:").grid(sticky=E)
+        Entry(panel, textvariable=self.maxTravel, width=8).grid(sticky=W, row=0, column=1)
+        Label(panel, text="Скорость:").grid(sticky=E)
+        self.programSpeed=IntVar(self, "-1000")
+        Entry(panel, textvariable=self.programSpeed, width=8).grid(sticky=W, row=1, column=1)
+        
+        panel = Frame(program, name="bottom")
+        panel.grid(columnspan=2, sticky=W)
+        row=0
+        startButton = Button (panel, name='start', text='Старт', command=self.__start__)
+        startButton.grid(row=row, column=0)
+        self.disabledWhileRunning.append(startButton)         
+        Button (panel, text='Стоп', command=self.__stop__).grid(row=row, column=1)         
+        
+        
         self.canvas = GraphCanvas(self)
         self.graphs = (Graph(self.canvas), Graph(self.canvas))
         
         self.canvas.x.end=100
         self.canvas.y.end=24
         self.plotFormulae()
-        self.canvas.grid(sticky=E+W+S+N, columnspan=columns)
+        self.canvas.grid(sticky=E+W+S+N)
         columns, rows = self.grid_size()
         self.columnconfigure(columns-1, weight=1)
         self.rowconfigure(rows-1, weight=1)
@@ -266,20 +316,26 @@ class GuiTest(unittest.TestCase):
         root, gui = GuiTest.create()
         try:
             test(root, gui)
+            gui.after(2, gui.nametowidget("mainMenu.quit").invoke)
+            root.mainloop()
         finally:
             root.destroy()
         
     def test_quit(self):
         def t(root, gui):
-            gui.invoke(gui.nametowidget("quit").invoke)
-            root.mainloop()
+            pass
         self.withRoot(t)
     def test_startQuit(self):
         def t(root, gui):
-            gui.nametowidget("start").invoke()
-            gui.nametowidget("quit").invoke()
-            root.mainloop()
+            gui.nametowidget("program.bottom.start").invoke()
         self.withRoot(t)
+    def test_upDown(self):
+        def t(root, gui):
+            gui.nametowidget("motor.up").invoke()
+            gui.nametowidget("motor.down").invoke()
+            gui.nametowidget("motor.down").invoke()
+        self.withRoot(t)
+        
         
 if __name__ == '__main__':
     unittest.main()

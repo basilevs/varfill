@@ -8,6 +8,8 @@ from piv import Kshd, Piv
 from datetime import datetime, timedelta
 
 class Mover(object):
+    def __init__(self):
+        self.maxTravel = -10000000 
     def setSpeed(self, speed):
         raise NotImplementedError
     def start(self):
