@@ -10,6 +10,7 @@ channel = 0
 address = 1
 hostname = "beam-daq"
 port = 10002
+speed = 100
 
 def printHelp():
     print("""
@@ -73,6 +74,7 @@ def run(speed):
         speedConf = kshd.getSpeed()
         speedConf.max = speed
         kshd.setSpeed(speedConf)
+        print(kshd.getSpeed())
         kshd.go(4000)
         wait()
     return r

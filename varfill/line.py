@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from socket import MSG_DONTWAIT, MSG_WAITALL, error as socket_error, timeout as socket_timeout
 from errno import EAGAIN
+from threading import Lock
 
 class Timeout(RuntimeError):
     pass
@@ -34,6 +35,7 @@ class Line(object):
     def __init__(self, socket):
         self.__socket__ = socket
         self.__buffer__ = bytearray()
+        self.lock = Lock()
     def readWithTimeout(self, timeout):
         """Reads socket into buffer until at least one byte is read or timeout is expired."""
         assert(isinstance(timeout, timedelta))
@@ -90,6 +92,7 @@ class DebugLine(object):
     def __init__(self, line, prefix=""):
         self.__line__ = line
         self.prefix = prefix
+        self.lock = Lock()
     def setTimeout(self, timeout):
         self.__line__.tiemout = timeout
     timeout = property(lambda self: self.__line__.timeout, setTimeout)

@@ -43,11 +43,16 @@ class AdamModule(object):
         command = bytes(command, "utf-8")
         address = self.__address__
         request = b"$" + address + command
-        self.__line__.write(request + b"\r")
+        self.__line__.lock.acquire()
         try:
-            line = self.__line__.readline(self.timeout)
-        except Timeout as e:
-            raise Timeout("Timeout while waiting for reply for query: " + request.decode("utf-8")) from e
+            self.__line__.write(request + b"\r")
+            try:
+                line = self.__line__.readline(self.timeout)
+            except Timeout as e:
+                raise Timeout("Timeout while waiting for reply for query: " + request.decode("utf-8")) from e
+        finally:
+            self.__line__.lock.release()
+            
         if len(line) < 3:
             raise BadReply(request, line, " reply is too short")
         if line[0:1] != b'!':

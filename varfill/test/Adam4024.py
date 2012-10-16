@@ -7,7 +7,7 @@ from time import sleep
 
 channel = 0
 address = 1
-hostname = "localhost"
+hostname = "beam-daq"
 port = 10002
 
 def printHelp():

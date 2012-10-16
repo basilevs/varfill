@@ -1,4 +1,4 @@
-from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, BOTH, N, S, LAST, NORMAL, DISABLED, Tk
+from tkinter import Frame, Button, Entry, StringVar, Canvas, E, W, N, S, LAST, NORMAL, Tk, IntVar, Label
 from threading import Thread
 from queue import Queue
 import unittest
@@ -140,13 +140,11 @@ class Gui(Frame):
         Frame.__init__(self, *args, **kwargs)
         self.queue = Queue()
         self.control = control
-        self.columnconfigure(2, weight=1)
-        self.rowconfigure(3, weight=1)
         self.disabledWhileRunning = []
         self.createWidgets()
         self.control.stepCallback = self.__addPoint__
         self.thread=None
-                
+
     def compileFormulae(self):
         rv = []
         for f in self.formulae:
@@ -210,31 +208,39 @@ class Gui(Frame):
     def __stop__(self):
         self.control.stop()
     def __quit__(self):
-        self.__stop__()
         def quitting():
+            self.__stop__()
             if self.thread and self.thread.is_alive():
                 print("Thread is active")
                 return False
             self.quit()
             return True
         run_repeating(self, quitting)
+    def __up__(self):
+        steps = int(self.steps.get())
+        self.control.mover.go(steps)
+    def __down__(self):
+        steps = int(self.steps.get())
+        self.control.mover.go(-steps)
         
     def createWidgets(self):
-        columns=3
+        columns=4
         startButton = Button (self, name='start', text='Старт', command=self.__start__)
         startButton.grid(row=0,column=0)
         self.disabledWhileRunning.append(startButton)         
         Button (self, text='Стоп', command=self.__stop__).grid(row=0,column=1)         
         Button (self, name='quit', text='Выход', command=self.__quit__).grid(row=0,column=2)
         self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
-        self.pumpEntries=[]
         for f in self.formulae:
             e = Entry(self, textvariable=f)
-            e.grid(sticky=E+W, columnspan=columns)
+            e.grid(sticky=E+W)
             self.disabledWhileRunning.append(e)
-            self.pumpEntries.append(e)
             f.trace("w", lambda *x: self.after_idle(self.plotFormulae))
-
+        Button(self, text='Вверх', command=self.__up__).grid(row=3, column=0)
+        Button(self, text='Вниз', command=self.__down__).grid(row=3, column=1)
+        Label(self, text="Шаг:").grid(sticky=E, row=3, column=2)
+        self.steps = IntVar(self, "100")
+        Entry(self, textvariable=self.steps).grid(sticky=W, row=3, column=3)
         self.canvas = GraphCanvas(self)
         self.graphs = (Graph(self.canvas), Graph(self.canvas))
         
@@ -242,6 +248,9 @@ class Gui(Frame):
         self.canvas.y.end=24
         self.plotFormulae()
         self.canvas.grid(sticky=E+W+S+N, columnspan=columns)
+        columns, rows = self.grid_size()
+        self.columnconfigure(columns-1, weight=1)
+        self.rowconfigure(rows-1, weight=1)
 
 
 class GuiTest(unittest.TestCase):

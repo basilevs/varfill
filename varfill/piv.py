@@ -86,15 +86,22 @@ class Piv(object):
         if body[0] != address:
             raise BadPivPacket(("Invalid address", data))
         return body[1:]
+    def query(self, address, request):
+        self.__line__.lock.acquire()
+        try:
+            self.send(address, request)
+            return self.receive(address)
+        finally:
+            self.__line__.lock.release()
+            
 
 class PivModule(object):
     def __init__(self, piv, address):
         assert(isinstance(piv, Piv))
         self.__piv__ = piv
         self.__address__ = int(address)
-    def query(self, data):
-        self.__piv__.send(self.__address__, data)
-        return self.__piv__.receive(self.__address__)
+    def query(self, request):
+        return self.__piv__.query(self.__address__, request)
 
 def unpackBits(count, number):
     rv = []

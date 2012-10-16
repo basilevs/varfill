@@ -11,8 +11,10 @@ class Mover(object):
     def setSpeed(self, speed):
         raise NotImplementedError
     def start(self):
-        raise NotImplementedError
+        self.go(10000000)
     def stop(self):
+        raise NotImplementedError
+    def getPosition(self):
         raise NotImplementedError
     
 class KshdMover(Mover):
@@ -23,10 +25,12 @@ class KshdMover(Mover):
         s = self.__kshd__.getSpeed()
         s.max = speed
         self.__kshd__.setSpeed(s)
-    def start(self, speed):
-        self.__kshd__.go(10000000)
+    def go(self, steps):
+        self.__kshd__.go(steps)
     def stop(self):
         self.__kshd__.stop()
+    def getPosition(self):
+        return self.__kshd__.getPosition()
 
 class Control(object):
     def __init__(self):
@@ -76,7 +80,9 @@ def defaultControl():
     adam1 = Adam4024(line, 1)
     adam1.setChannelOutputRange(3, 1)
     def pump1(value):
-        adam1.setChannel(3, value*20+4)
+        adam1.setChannel(3, value)
+    def pump2(value):
+        print("Set pump2 to:", value)
     control.pumps = [pump1]
     return control
 
@@ -84,19 +90,36 @@ def mockControl():
     control = Control()
     
     class MoverMock(Mover):
+        def __init__(self):
+            self.startTime = None
+            self.position = 0
+            self.speed = 100
         def setSpeed(self, speed):
+            self.speed = speed
             print("Speed",speed)
         def start(self):
+            self.startTime = datetime.now()
             print("Mover start")
         def stop(self):
+            self.position = self.getPosition()
+            self.startTime = None
             print("Mover stop")
+        def go(self, steps):
+            if self.startTime:
+                raise RuntimeError("The motor is moving now")
+            self.position += steps
+            print("Moved to:", self.position)
+        def getPosition(self):
+            if self.startTime:
+                return self.position + self.speed * (datetime.now() - self.startTime).total_seconds()
+            return self.position
             
     control.mover = MoverMock()
     def pump1(value):
-        sleep(0.5)
+        sleep(0.1)
         print("Pump1: "+str(value))
     def pump2(value):
-        sleep(0.5)
+        sleep(0.1)
         print("Pump2: "+str(value))
         
     control.pumps=[pump1, pump2]
