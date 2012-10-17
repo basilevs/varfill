@@ -175,6 +175,7 @@ class Gui(Frame):
                 v = None
                 if compiled[c]:
                     v = compiled[c](x)
+                assert(isinstance(v, float))
                 point.append(v)
             self.__addPoint__(x, point)
         self.canvas.update()
@@ -182,7 +183,7 @@ class Gui(Frame):
         self.canvas.x.end=self.executionTime.get()
         time = float(self.canvas.x.end - self.canvas.x.start)        
         pumps = self.compileFormulae()        
-        self.control.mover.maxTravel = abs(int(self.maxTravel.get()))
+        self.control.mover.maxTravel = int(self.maxTravel.get())
         def calcPumpValues(time):
             return list(map(lambda x: x(time), pumps))
         def thFunc():
@@ -203,6 +204,8 @@ class Gui(Frame):
         for e in self.disabledWhileRunning:
             e.config(state = "disabled")
     def __addPoint__(self, x, values):
+        for v in values:
+            assert(isinstance(v, float))
         def c():
             for i in range(len(self.canvas.graphs)):
                 self.canvas.graphs[i].addPoint(x, values[i])
@@ -227,6 +230,7 @@ class Gui(Frame):
         if speed < 0:
             speed *= -1
             self.speed.set(speed)
+        self.control.mover.setSpeed(speed)
         self.control.mover.go(steps)
     def __up__(self):
         steps = int(self.steps.get())
@@ -248,7 +252,7 @@ class Gui(Frame):
         b.grid(row=1, column=0)
         self.disabledWhileRunning.append(b)
         Label(panel, text="Шаг:").grid(sticky=E, row=0, column=1)
-        self.steps = IntVar(self, "100")
+        self.steps = IntVar(self, "10000")
         Entry(panel, textvariable=self.steps, width=6).grid(sticky=W, row=0, column=2)
         Label(panel, text="Скорость:").grid(sticky=E, row=1, column=1)
         self.speed = IntVar(self, "1000")
@@ -262,7 +266,7 @@ class Gui(Frame):
         Label(panel, text="Положение:").grid(sticky=E, row=1, column=3)
         Entry(panel, textvariable=self.position, width=8, state = "disabled").grid(sticky=W, row=1, column=4)
 
-        self.formulae=list(map(lambda t: StringVar(self, t), ["x/7.14+4","20-x/7.14"]))
+        self.formulae=list(map(lambda t: StringVar(self, t), ["x/11.25+4","50-x*50/180"]))
         panel = LabelFrame(self, text="Программа", name="program")
         program=panel
         panel.grid(sticky=W+E)
@@ -278,14 +282,14 @@ class Gui(Frame):
             row+=1
         panel = Frame(program, name="mover")
         panel.grid(columnspan=2, sticky=W)        
-        self.maxTravel = IntVar(self, "-1000000")
+        self.maxTravel = IntVar(self, "-200000")
         Label(panel, text="Максимальное смещение:").grid(sticky=E)
         Entry(panel, textvariable=self.maxTravel, width=8).grid(sticky=W, row=0, column=1)
         Label(panel, text="Скорость:").grid(sticky=E)
-        self.programSpeed=IntVar(self, "-1000")
+        self.programSpeed=IntVar(self, "585")
         Entry(panel, textvariable=self.programSpeed, width=8).grid(sticky=W, row=1, column=1)
         Label(panel, text="Время выполнения (в секундах):").grid(sticky=E)
-        self.executionTime = DoubleVar(self, "100")
+        self.executionTime = DoubleVar(self, "180")
         e=Entry(panel, textvariable=self.executionTime, width=4)
         e.grid(sticky=W, row=2, column=1)
         self.disabledWhileRunning.append(e)

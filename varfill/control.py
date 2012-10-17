@@ -13,7 +13,8 @@ class Mover(object):
     def setSpeed(self, speed):
         raise NotImplementedError
     def start(self):
-        self.go(10000000)
+        print("Max travel:", self.maxTravel)
+        self.go(self.maxTravel)
     def stop(self):
         raise NotImplementedError
     def getPosition(self):
@@ -32,7 +33,7 @@ class KshdMover(Mover):
     def stop(self):
         self.__kshd__.stop()
     def getPosition(self):
-        return self.__kshd__.getPosition()
+        return self.__kshd__.getCoordinate()
 
 class Control(object):
     def __init__(self):
@@ -45,8 +46,14 @@ class Control(object):
     def __stop__(self):
         self.stopRequest = True
         for i in range(len(self.pumps)):
-            self.pumps[i](0)
-        self.mover.stop()
+            try:
+                self.pumps[i](0)
+            except:
+                pass
+        try:
+            self.mover.stop()
+        except:
+            pass
     def executeProgram(self, time, moveSpeed, calcPumpValues):
         """ time - a total execution time in seconds
             moveSpeed - a speed of motor (will be constant during whole process)
@@ -60,20 +67,22 @@ class Control(object):
         start = datetime.now()
         until = start + timedelta(seconds = time)
         self.mover.start()
-        while datetime.now() < until:
-            if self.stopRequest:
-                break
-            seconds = (datetime.now() - start).total_seconds();
-            values = calcPumpValues(seconds)
-            for i in range(len(self.pumps)):
-                self.pumps[i](values[i])
-            self.stepCallback(seconds, values)
-        self.__stop__()
+        try:
+            while datetime.now() < until:
+                if self.stopRequest:
+                    break
+                seconds = (datetime.now() - start).total_seconds();
+                values = calcPumpValues(seconds)
+                for i in range(len(self.pumps)):
+                    self.pumps[i](values[i])
+                self.stepCallback(seconds, values)
+        finally:
+            self.__stop__()
     def stop(self):
         self.__stop__()
         
-def defaultControl():
-    s = create_connection(("beam-daq", 10002))
+def defaultControl(host="192.168.1.10"):
+    s = create_connection((host, 10002))
     line = Line(s)
     piv = Piv(line)
     kshd = Kshd(piv, 1)
@@ -82,10 +91,12 @@ def defaultControl():
     adam1 = Adam4024(line, 1)
     adam1.setChannelOutputRange(3, 1)
     def pump1(value):
+        if (value > 20):
+            value=20
         adam1.setChannel(3, value)
     def pump2(value):
         print("Set pump2 to:", value)
-    control.pumps = [pump1]
+    control.pumps = [pump1, pump2]
     return control
 
 def mockControl():
