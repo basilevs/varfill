@@ -41,15 +41,6 @@ class Line(object):
         assert(isinstance(timeout, timedelta))
         socket = self.__socket__
         try:
-            socket.settimeout(0.01)
-            self.__buffer__ += socket.recv(4096)
-            return
-        except socket_timeout:
-            pass
-        except socket_error as e:
-            if e.errno != EAGAIN:
-                raise
-        try:
             socket.settimeout(timeout.total_seconds())
             #print("Waiting")
             self.__buffer__ += socket.recv(1)

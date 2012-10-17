@@ -1,11 +1,11 @@
-from tkinter import Frame, LabelFrame, Button, Entry, StringVar, Canvas, E, W, N, S, LAST, NORMAL, Tk, IntVar, Label
+from tkinter import Frame, LabelFrame, Button, Entry, StringVar, Canvas, E, W, N, S, LAST, NORMAL, Tk, DoubleVar, IntVar, Label
 from threading import Thread
 from queue import Queue
 import unittest
 from control import mockControl
 
 class Axis(object):
-    def __init__(self, start=0, end = 100, size = 100, direction = 1, margin = 10):
+    def __init__(self, start=0, end = 100, size = 100, direction = 1, margin = 20):
         self.start = start
         self.end = end
         self.size = size
@@ -167,7 +167,9 @@ class Gui(Frame):
             return
         for g in self.graphs:
             g.points=[]
-        for x in range(self.canvas.x.start, self.canvas.x.end):        
+        self.canvas.x.end=self.executionTime.get()
+        self.canvas.clear()
+        for x in range(self.canvas.x.start, int(self.canvas.x.end)):        
             point = []
             for c in range(len(compiled)):
                 v = None
@@ -177,8 +179,10 @@ class Gui(Frame):
             self.__addPoint__(x, point)
         self.canvas.update()
     def __start__(self):
+        self.canvas.x.end=self.executionTime.get()
         time = float(self.canvas.x.end - self.canvas.x.start)        
         pumps = self.compileFormulae()        
+        self.control.mover.maxTravel = abs(int(self.maxTravel.get()))
         def calcPumpValues(time):
             return list(map(lambda x: x(time), pumps))
         def thFunc():
@@ -188,7 +192,6 @@ class Gui(Frame):
                 self.control.executeProgram(time, abs(int(self.programSpeed.get())), calcPumpValues)
             finally:
                 self.invoke(self.__enableControls__)
-        self.control.mover.maxTravel = abs(int(self.maxTravel.get()))
         self.__disableControls__()
         self.canvas.clear()
         self.thread = Thread(target=thFunc, name="Control")
@@ -281,6 +284,12 @@ class Gui(Frame):
         Label(panel, text="Скорость:").grid(sticky=E)
         self.programSpeed=IntVar(self, "-1000")
         Entry(panel, textvariable=self.programSpeed, width=8).grid(sticky=W, row=1, column=1)
+        Label(panel, text="Время выполнения (в секундах):").grid(sticky=E)
+        self.executionTime = DoubleVar(self, "100")
+        e=Entry(panel, textvariable=self.executionTime, width=4)
+        e.grid(sticky=W, row=2, column=1)
+        self.disabledWhileRunning.append(e)
+        self.executionTime.trace("w", lambda *x: self.plotFormulae())
         
         panel = Frame(program, name="bottom")
         panel.grid(columnspan=2, sticky=W)
