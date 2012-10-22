@@ -143,7 +143,6 @@ class Gui(Frame):
         self.control = control
         self.disabledWhileRunning = []
         self.createWidgets()
-        self.control.stepCallback = self.__addPoint__
         self.thread=None
 
     def compileFormulae(self):
@@ -184,13 +183,18 @@ class Gui(Frame):
         time = float(self.canvas.x.end - self.canvas.x.start)        
         pumps = self.compileFormulae()        
         self.control.mover.maxTravel = int(self.maxTravel.get())
+        start_time = float(self.current_time.get())
         def calcPumpValues(time):
-            return list(map(lambda x: x(time), pumps))
+            time = start_time + time 
+            values = list(map(lambda x: x(time), pumps))
+            self.__addPoint__(time, values)
+            self.current_time.set(time)
+            return values
         def thFunc():
             try:
                 for g in self.graphs:
                     g.points=[]
-                self.control.executeProgram(time, abs(int(self.programSpeed.get())), calcPumpValues)
+                self.control.executeProgram(time-start_time, abs(int(self.programSpeed.get())), calcPumpValues)
             finally:
                 self.invoke(self.__enableControls__)
         self.__disableControls__()
@@ -292,6 +296,10 @@ class Gui(Frame):
         self.executionTime = DoubleVar(self, "360")
         e=Entry(panel, textvariable=self.executionTime, width=4)
         e.grid(sticky=W, row=2, column=1)
+        self.current_time = DoubleVar(self, "0")
+        Label(panel, text="Текущее время:").grid(sticky=E)
+        e=Entry(panel, textvariable=self.current_time, width=6)
+        e.grid(sticky=W, row=3, column=1)        
         self.disabledWhileRunning.append(e)
         self.executionTime.trace("w", lambda *x: self.plotFormulae())
         

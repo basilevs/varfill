@@ -39,9 +39,6 @@ class Control(object):
     def __init__(self):
         self.pumps=[]
         self.mover=Mover()
-        def dummy(seconds, pumpValues):
-            pass
-        self.stepCallback=dummy
         self.stopRequest = True
     def __stop__(self):
         self.stopRequest = True
@@ -75,7 +72,6 @@ class Control(object):
                 values = calcPumpValues(seconds)
                 for i in range(len(self.pumps)):
                     self.pumps[i](values[i])
-                self.stepCallback(seconds, values)
         finally:
             self.__stop__()
     def stop(self):
