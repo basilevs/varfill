@@ -266,7 +266,7 @@ class Gui(Frame):
         Label(panel, text="Положение:").grid(sticky=E, row=1, column=3)
         Entry(panel, textvariable=self.position, width=8, state = "disabled").grid(sticky=W, row=1, column=4)
 
-        self.formulae=list(map(lambda t: StringVar(self, t), ["x/11.25+4","50-x*50/180"]))
+        self.formulae=list(map(lambda t: StringVar(self, t), ["x/22.5+4","50-x*50/180"]))
         panel = LabelFrame(self, text="Программа", name="program")
         program=panel
         panel.grid(sticky=W+E)
@@ -286,10 +286,10 @@ class Gui(Frame):
         Label(panel, text="Максимальное смещение:").grid(sticky=E)
         Entry(panel, textvariable=self.maxTravel, width=8).grid(sticky=W, row=0, column=1)
         Label(panel, text="Скорость:").grid(sticky=E)
-        self.programSpeed=IntVar(self, "585")
+        self.programSpeed=IntVar(self, "292")
         Entry(panel, textvariable=self.programSpeed, width=8).grid(sticky=W, row=1, column=1)
         Label(panel, text="Время выполнения (в секундах):").grid(sticky=E)
-        self.executionTime = DoubleVar(self, "180")
+        self.executionTime = DoubleVar(self, "360")
         e=Entry(panel, textvariable=self.executionTime, width=4)
         e.grid(sticky=W, row=2, column=1)
         self.disabledWhileRunning.append(e)
