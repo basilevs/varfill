@@ -12,6 +12,8 @@ class Mover(object):
         self.maxTravel = -10000000 
     def setSpeed(self, speed):
         raise NotImplementedError
+    def getSpeed(self):
+        raise NotImplementedError
     def start(self):
         print("Max travel:", self.maxTravel)
         self.go(self.maxTravel)
@@ -28,6 +30,8 @@ class KshdMover(Mover):
         s = self.__kshd__.getSpeed()
         s.max = speed
         self.__kshd__.setSpeed(s)
+    def getSpeed(self):
+        return self.__kshd__.getSpeed().max
     def go(self, steps):
         self.__kshd__.go(steps)
     def stop(self):
@@ -40,6 +44,7 @@ class Control(object):
         self.pumps=[]
         self.mover=Mover()
         self.stopRequest = True
+        self.fullTime = 360
     def __stop__(self):
         self.stopRequest = True
         for i in range(len(self.pumps)):
@@ -51,18 +56,19 @@ class Control(object):
             self.mover.stop()
         except:
             pass
-    def executeProgram(self, time, moveSpeed, calcPumpValues):
+    def executeProgram(self, startTime, calcPumpValues):
         """ time - a total execution time in seconds
             moveSpeed - a speed of motor (will be constant during whole process)
             calPumpValues - a callable that should accept time in seconds since program start (floating point number)
             and return a tuple of pump speeds each speed should be a floating point in [0..1] 
         """
+        startTime=float(startTime)
         if not self.stopRequest:
-            raise RuntimeError("Already running")           
+            raise RuntimeError("Already running")
+        assert(startTime >= 0)           
         self.stopRequest = False
-        self.mover.setSpeed(moveSpeed)
-        start = datetime.now()
-        until = start + timedelta(seconds = time)
+        start = datetime.now() - timedelta(seconds=startTime)
+        until = start + timedelta(seconds = self.fullTime)
         self.mover.start()
         try:
             while datetime.now() < until:
@@ -76,36 +82,50 @@ class Control(object):
             self.__stop__()
     def stop(self):
         self.__stop__()
+    def reconnect(self):
+        pass
         
+class LineControl(Control):
+    def reconnect(self):
+        Control.__init__(self)
+        control=self
+        s = create_connection((self.host, 10002))
+        line = Line(s)
+        piv = Piv(line)
+        kshd = Kshd(piv, 1)
+        control.mover = KshdMover(kshd)
+        adam1 = Adam4024(line, 1)
+        adam1.setChannelOutputRange(3, 1)
+        def pump1(value):
+            if (value > 20):
+                value=20
+            adam1.setChannel(3, value)
+        def pump2(value):
+            print("Set pump2 to:", value)
+        control.pumps = [pump1, pump2]
+    def __init__(self):
+        self.host="192.168.1.10"
+        self.reconnect()
+
 def defaultControl(host="192.168.1.10"):
-    s = create_connection((host, 10002))
-    line = Line(s)
-    piv = Piv(line)
-    kshd = Kshd(piv, 1)
-    control = Control()
-    control.mover = KshdMover(kshd)
-    adam1 = Adam4024(line, 1)
-    adam1.setChannelOutputRange(3, 1)
-    def pump1(value):
-        if (value > 20):
-            value=20
-        adam1.setChannel(3, value)
-    def pump2(value):
-        print("Set pump2 to:", value)
-    control.pumps = [pump1, pump2]
-    return control
+    c = LineControl()
+    c.host=host
+    return c
 
 def mockControl():
     control = Control()
     
     class MoverMock(Mover):
         def __init__(self):
+            Mover.__init__(self)
             self.startTime = None
             self.position = 0
             self.speed = 100
         def setSpeed(self, speed):
             self.speed = speed
             print("Speed",speed)
+        def getSpeed(self):
+            return self.speed
         def start(self):
             self.startTime = datetime.now()
             print("Mover start")
@@ -132,5 +152,7 @@ def mockControl():
         print("Pump2: "+str(value))
         
     control.pumps=[pump1, pump2]
+    
+    
     return control
     

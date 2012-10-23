@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from socket import error as socket_error, timeout as socket_timeout
+from socket import error as socket_error, timeout as socket_timeout, create_connection
 from errno import EAGAIN
 from threading import Lock
 
@@ -30,6 +30,23 @@ def tohex(data):
         rv+="%02X" % b
     return rv
 
+class PersistentSocket(object):
+    """Imitates auto-reconnecting socket"""
+    def __init__(self, address):
+        self.address = address
+        self.__socket__ = create_connection(self.address)         
+    @staticmethod
+    def create_connection(address):
+        return PersistentSocket(address)
+    def settimeout(self, timeout):
+        return self.__socket__.settimeout(timeout)
+    def gettimeout(self):
+        return self.__socket__.gettimeout()
+    def recv(self, byteCount):
+        return self.__socket__.recv(byteCount)
+    def sendall(self, data):
+        
+        return self.__socket__.sendall(data)
         
 class Line(object):
     def __init__(self, socket):
@@ -42,6 +59,10 @@ class Line(object):
         socket = self.__socket__
         try:
             socket.settimeout(timeout.total_seconds())
+            data = socket.recv(4092)
+            if len(data):
+                self.__buffer__ += data
+                return
             #print("Waiting")
             self.__buffer__ += socket.recv(1)
         except socket_timeout as e:
@@ -79,6 +100,7 @@ class Line(object):
         finally:
             socket.settimeout(oldtimeout)    
 
+
 class DebugLine(object):
     def __init__(self, line, prefix=""):
         self.__line__ = line
@@ -99,3 +121,6 @@ class DebugLine(object):
         print(self.prefix,"read ",tohex(rv))
         return rv
     
+
+        
+        

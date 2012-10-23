@@ -3,6 +3,7 @@ from threading import Thread
 from queue import Queue
 import unittest
 from control import mockControl
+from config import Config
 
 class Axis(object):
     def __init__(self, start=0, end = 100, size = 100, direction = 1, margin = 20):
@@ -133,7 +134,7 @@ def run_repeating(widget, predicate, delay = 1000):
             return
         widget.after(delay, torun)
     torun()
-    
+
         
 class Gui(Frame):
     def __init__(self, control, *args, **kwargs):
@@ -142,6 +143,13 @@ class Gui(Frame):
         self.queue = Queue()
         self.control = control
         self.disabledWhileRunning = []
+
+        self.formulae=list(map(lambda t: StringVar(self, t), ["x/22.5+4","50-x*50/180"]))
+        self.executionTime = DoubleVar(self, "360")
+        self.programSpeed=IntVar(self, "292")
+        self.maxTravel = IntVar(self, "-200000")
+        self.loadSettings()
+
         self.createWidgets()
         self.thread=None
 
@@ -180,12 +188,11 @@ class Gui(Frame):
         self.canvas.update()
     def __start__(self):
         self.canvas.x.end=self.executionTime.get()
-        time = float(self.canvas.x.end - self.canvas.x.start)        
-        pumps = self.compileFormulae()        
-        self.control.mover.maxTravel = int(self.maxTravel.get())
+        pumps = self.compileFormulae() 
+        self.setValues()
+        self.control.mover.setSpeed(abs(int(self.programSpeed.get())))       
         start_time = float(self.current_time.get())
         def calcPumpValues(time):
-            time = start_time + time 
             values = list(map(lambda x: x(time), pumps))
             self.__addPoint__(time, values)
             self.current_time.set(time)
@@ -194,7 +201,7 @@ class Gui(Frame):
             try:
                 for g in self.graphs:
                     g.points=[]
-                self.control.executeProgram(time-start_time, abs(int(self.programSpeed.get())), calcPumpValues)
+                self.control.executeProgram(start_time, calcPumpValues)
             finally:
                 self.invoke(self.__enableControls__)
         self.__disableControls__()
@@ -242,11 +249,48 @@ class Gui(Frame):
     def __down__(self):
         steps = int(self.steps.get())
         self.__move__(-steps)
+    
+    def showValues(self):
+        self.maxTravel.set(self.control.mover.maxTravel)
+        self.executionTime.set(self.control.fullTime)
+        self.programSpeed.set(self.control.mover.getSpeed())
+        
+    def setValues(self):
+        self.control.mover.maxTravel = int(self.maxTravel.get())
+        self.control.fullTime = float(self.executionTime.get())
+        self.control.mover.setSpeed(abs(int(self.programSpeed.get())))
+        
+    def loadSettings(self):
+        config = Config()
+        try:
+            config.read()
+        except KeyError:
+            pass
+        config.configureControl(self.control)
+        for i in range(len(self.formulae)):
+            self.formulae[i].set(config.formulae[i])
+        self.showValues()
+    
+    def saveSettings(self):
+        self.setValues()
+        config = Config()
+        config.getFromControl(self.control)
+        for i in range(len(self.formulae)):
+            config.formulae[i] = self.formulae[i].get()
+        config.write()
+        
         
     def createWidgets(self):
         panel = Frame(self, name="mainMenu")
-        panel.grid(sticky=W)        
-        Button (panel, name='quit', text='Выход', command=self.__quit__).grid(row=0,column=2)
+        panel.grid(sticky=W)
+        Button (panel, name='quit', text='Выход', command=self.__quit__).grid(row=0,column=0)
+        Button (panel, name='reconnect', text='Пересоединение', command=self.control.reconnect).grid(row=0,column=1)
+        b=Button (panel, text='Загрузить', command=self.loadSettings)
+        b.grid(row=0,column=2)
+        self.disabledWhileRunning.append(b)
+        b=Button (panel, text='Сохранить', command=self.saveSettings)
+        b.grid(row=0,column=3)
+        self.disabledWhileRunning.append(b)
         panel = LabelFrame(self, text="Прямое управление стаканом", name="motor")
         panel.grid(sticky=W)
         b=Button(panel, text='Вверх', command=self.__up__, name="up")
@@ -269,8 +313,7 @@ class Gui(Frame):
         self.disabledWhileRunning.append(b)
         Label(panel, text="Положение:").grid(sticky=E, row=1, column=3)
         Entry(panel, textvariable=self.position, width=8, state = "disabled").grid(sticky=W, row=1, column=4)
-
-        self.formulae=list(map(lambda t: StringVar(self, t), ["x/22.5+4","50-x*50/180"]))
+        
         panel = LabelFrame(self, text="Программа", name="program")
         program=panel
         panel.grid(sticky=W+E)
@@ -286,19 +329,16 @@ class Gui(Frame):
             row+=1
         panel = Frame(program, name="mover")
         panel.grid(columnspan=2, sticky=W)        
-        self.maxTravel = IntVar(self, "-200000")
         Label(panel, text="Максимальное смещение:").grid(sticky=E)
-        Entry(panel, textvariable=self.maxTravel, width=8).grid(sticky=W, row=0, column=1)
+        Entry(panel, textvariable=self.maxTravel).grid(sticky=W, row=0, column=1)
         Label(panel, text="Скорость:").grid(sticky=E)
-        self.programSpeed=IntVar(self, "292")
-        Entry(panel, textvariable=self.programSpeed, width=8).grid(sticky=W, row=1, column=1)
+        Entry(panel, textvariable=self.programSpeed).grid(sticky=W, row=1, column=1)
         Label(panel, text="Время выполнения (в секундах):").grid(sticky=E)
-        self.executionTime = DoubleVar(self, "360")
-        e=Entry(panel, textvariable=self.executionTime, width=4)
+        e=Entry(panel, textvariable=self.executionTime)
         e.grid(sticky=W, row=2, column=1)
         self.current_time = DoubleVar(self, "0")
         Label(panel, text="Текущее время:").grid(sticky=E)
-        e=Entry(panel, textvariable=self.current_time, width=6)
+        e=Entry(panel, textvariable=self.current_time)
         e.grid(sticky=W, row=3, column=1)        
         self.disabledWhileRunning.append(e)
         self.executionTime.trace("w", lambda *x: self.plotFormulae())
@@ -324,40 +364,3 @@ class Gui(Frame):
         self.rowconfigure(rows-1, weight=1)
 
 
-class GuiTest(unittest.TestCase):
-    @staticmethod
-    def create():
-        root=Tk()        
-        root.columnconfigure(0, weight=1)
-        root.rowconfigure(0, weight=1)
-        gui = Gui(mockControl(), root)
-        gui.grid(sticky=E+W+S+N)
-        return (root, gui)
-    def withRoot(self, test):
-        root, gui = GuiTest.create()
-        try:
-            test(root, gui)
-            gui.after(2, gui.nametowidget("mainMenu.quit").invoke)
-            root.mainloop()
-        finally:
-            root.destroy()
-        
-    def test_quit(self):
-        def t(root, gui):
-            pass
-        self.withRoot(t)
-    def test_startQuit(self):
-        def t(root, gui):
-            gui.nametowidget("program.bottom.start").invoke()
-        self.withRoot(t)
-    def test_upDown(self):
-        def t(root, gui):
-            gui.nametowidget("motor.up").invoke()
-            gui.nametowidget("motor.down").invoke()
-            gui.nametowidget("motor.down").invoke()
-        self.withRoot(t)
-        
-        
-if __name__ == '__main__':
-    unittest.main()
-       
