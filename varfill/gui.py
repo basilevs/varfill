@@ -4,6 +4,8 @@ from queue import Queue
 import unittest
 from control import mockControl
 from config import Config
+from traceback import print_exc
+from line import Timeout
 
 class Axis(object):
     def __init__(self, start=0, end = 100, size = 100, direction = 1, margin = 20):
@@ -307,7 +309,10 @@ class Gui(Frame):
         Entry(panel, textvariable=self.speed, width=6).grid(sticky=W, row=1, column=2)
         self.position = IntVar(self, "1000")
         def readPosition():
-            self.position.set(self.control.mover.getPosition())
+            try:
+                self.position.set(self.control.mover.getPosition())
+            except (ConnectionResetError, Timeout):
+                pass
         run_repeating(self, readPosition, 10000)
         b=Button(panel, text="Прочитать положение", command=readPosition)
         b.grid(row=0, column=3, columnspan=2)
