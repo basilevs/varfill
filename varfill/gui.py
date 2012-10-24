@@ -308,6 +308,7 @@ class Gui(Frame):
         self.position = IntVar(self, "1000")
         def readPosition():
             self.position.set(self.control.mover.getPosition())
+        run_repeating(self, readPosition, 10000)
         b=Button(panel, text="Прочитать положение", command=readPosition)
         b.grid(row=0, column=3, columnspan=2)
         self.disabledWhileRunning.append(b)

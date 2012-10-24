@@ -125,6 +125,8 @@ class Kshd(PivModule):
         data = self.query(b'\x01')
         if data[0:2] != b'WS':
             raise BadPivModuleType(data)
+        self.getCoordinate()
+        self.lastCoordinate = 0
     class Status(object):
         def __init__(self, b):
             b = int(b)
@@ -242,13 +244,20 @@ class Kshd(PivModule):
     def stop(self):
         return self.__queryForStatus__(b'\x08')
     def getCoordinate(self):
+        if not self.status().ready:
+            return self.lastCoordinate
         reply = self.query(b'\x14')
         if len(reply)!=4:
             raise BadPivRelpy("Invalid position reply: "+str(reply))
         rv = unpack("!i", reply)
         if rv[0] == Kshd.invalidCoordinate:
+            try:
+                self.setCoordinate(0)
+            except:
+                pass
             raise BadPivRelpy("Invalid coordinate")
-        return rv[0] 
+        self.lastCoordinate = rv[0]
+        return rv[0]
     def setCoordinate(self, x):
         return self.__queryForStatus__(b'\x13'+pack("!i", x))
     def getStepsToGo(self):
