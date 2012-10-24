@@ -303,7 +303,7 @@ class Gui(Frame):
         self.steps = IntVar(self, "10000")
         Entry(panel, textvariable=self.steps, width=6).grid(sticky=W, row=0, column=2)
         Label(panel, text="Скорость:").grid(sticky=E, row=1, column=1)
-        self.speed = IntVar(self, "1000")
+        self.speed = IntVar(self, "2000")
         Entry(panel, textvariable=self.speed, width=6).grid(sticky=W, row=1, column=2)
         self.position = IntVar(self, "1000")
         def readPosition():

@@ -1,6 +1,6 @@
 import unittest
 import socket
-from socket import error as socket_error, timeout as socket_timeout, create_connection, socketpair
+from socket import error as socket_error, timeout as socket_timeout, create_connection
 from time import sleep
 import unittest
 from threading import Thread
@@ -14,11 +14,15 @@ class EchoServer(Thread):
         self.__socket__ = socket
         self.start()
     def close(self):
-        self.__socket__.close()
+        s=self.__socket__
+        self.__socket__=None
+        s.close()
     def run(self):
         start = datetime.now()
         try:
             while (datetime.now() - start).total_seconds() < 2:
+                if not self.__socket__:
+                    break
                 data = self.__socket__.recv(1)
                 if len(data):
                     self.__socket__.sendall(data)
@@ -67,16 +71,17 @@ class LineTest(unittest.TestCase):
     def test_connFail(self):
         self.assertRaises(socket_error, PersistentSocket, self.address())        
     def test_simpleLine(self):
-        client, server = socketpair()
-        EchoServer(server)
-        data = b'sdafsf454534\n'
-        line = Line(client)
-        line.write(data)
-        l = line.readline(timedelta(seconds=1), b'\n')
-        self.assertEqual(data, l+b'\n')
+        address = self.address()
+        accept = self.serve(address)
+        client=create_connection(address)
+        try:
+            data = b'sdafsf454534\n'
+            line = Line(client)
+            line.write(data)
+            l = line.readline(timedelta(seconds=1), b'\n')
+            self.assertEqual(data, l+b'\n')
+        finally:
+            client.close()
+            accept.close()
     def serve(self, address):
         return Accept(address, EchoServer)
-
-if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
-    unittest.main()
