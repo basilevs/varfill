@@ -7,7 +7,7 @@ class Config(object):
         self.executionTime = 360
         self.programSpeed = 250
         self.maxTravel = -200000
-        self.formulae = ["x/22.5+4","50-x*50/180"]
+        self.formulae = ["x/22.5+4","20-x/22.5"]
     def write(self, file = None):
         if not file:
             file = open(self.filename, 'w')
