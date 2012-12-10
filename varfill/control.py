@@ -1,6 +1,6 @@
 from socket import create_connection
 from line import Line
-from adam import Adam4024
+from adam import Adam4024, Adam4068
 from sys import argv
 from getopt import getopt
 from time import sleep
@@ -96,15 +96,22 @@ class LineControl(Control):
         control.mover = KshdMover(kshd)
         adam1 = Adam4024(line, 1)
         adam1.setChannelOutputRange(3, 1)
-        adam1.setChannelOutputRange(1, 1)
         def pump1(value):
             if (value > 20):
                 value=20
             adam1.setChannel(3, value)
+        adam1.setChannelOutputRange(2, 1)
+        relay = Adam4068(line, 2)
+        relay.setChannel(0, False)
         def pump2(value):
             if (value > 20):
                 value=20
-            adam1.setChannel(1, value)
+            if (value < 4):
+                relay.setChannel(0, False)
+                adam1.setChannel(2, 0)
+            else:
+                relay.setChannel(0, True)
+                adam1.setChannel(2, value)
         control.pumps = [pump1, pump2]
     def __init__(self):
         self.host="192.168.1.10"
