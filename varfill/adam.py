@@ -13,9 +13,12 @@ class BadModuleType(AdamError):
 
 def toString(input):
     if isinstance(input, str):
-        return input 
-    if isinstance(input, bytes) or isinstance(input, bytearray):
-        return input.decode("utf-8")
+        return input
+    try:
+        if isinstance(input, bytes) or isinstance(input, bytearray):
+            return input.decode("utf-8")
+    except UnicodeDecodeError:
+        return ""
     raise TypeError("toString() accept only strings, bytes, or bytearrays")
     
 class BadReply(AdamError):
@@ -64,11 +67,14 @@ class AdamModule(object):
         address = self.__address__
         data = bytes(data, "utf-8")
         request = b"#" + address + data
-        self.__line__.write(request + b"\r")
+        self.__line__.lock.acquire()
         try:
+            self.__line__.write(request + b"\r")
             line = self.__line__.readline(self.timeout)
         except Timeout as e:
             raise Timeout("Error while waiting for reply to write request: " + request.decode("utf-8")) from e
+        finally:
+            self.__line__.lock.release()
         if line == b">":
             return
         elif line[0:1] == b'!':
@@ -88,7 +94,11 @@ class Adam4068(AdamModule):
     def __init__(self, line, address):
         AdamModule.__init__(self, line, address)
         t = self.query("M")
-        if t != "4068":
+        if t == "4068":
+            self.channelCount=8
+        elif t == "4060":
+            self.channelCount=4
+        else:
             raise BadModuleType("4068", t)
     def setChannel(self, channel, enabled=True):
         """ Switches channel to given position """ 
